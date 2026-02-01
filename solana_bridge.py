@@ -10,11 +10,13 @@ import qrcode
 import json
 import csv
 from datetime import datetime
+import os
 
 # ================= CONFIGURATION =================
 ARDUINO_PORT = "COM3"  # CHANGE THIS to your Arduino Port
 BAUD_RATE = 9600
 WALLET_PATH = "hackathon-wallet.json" # Path to the file you generated in Phase 1
+RUN_ID = 0 # Incremental Run ID for each submission
 
 # Solana Setup (Devnet)
 client = Client("https://api.devnet.solana.com")
@@ -27,6 +29,12 @@ sender = Keypair.from_bytes(key_data)
 print(f"✅ Bridge Loaded. Wallet: {sender.pubkey()}")
 print(f"📡 Listening on {ARDUINO_PORT}...")
 
+if not os.path.exists("runs.csv"):
+    with open("runs.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "score", "duration_ms", "tx_signature"])
+
+
 def log_run(score, duration, signature):
     with open("runs.csv", "a", newline="") as f:
         writer = csv.writer(f)
@@ -37,7 +45,7 @@ def log_run(score, duration, signature):
             signature
         ])
 
-def send_to_blockchain(score, duration):
+def send_to_blockchain(score, duration, ser):
     print(f"\n[EVENT] Robot finished! Score: {score}, Time: {duration}ms")
     print("       Minting Proof of Run...")
 
@@ -45,7 +53,7 @@ def send_to_blockchain(score, duration):
     # This writes the score permanently onto the chain
     memo_program_id = Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcQb")
     ROBOT_ID = "UTRA-BIATHLON-01"
-    RUN_ID += 1
+    global RUN_ID; RUN_ID += 1
 
     memo_text = (
         f"UTRA HACKS 2026 | {ROBOT_ID} | RUN {RUN_ID} | "
@@ -73,6 +81,9 @@ def send_to_blockchain(score, duration):
 
         # Acknowledge to Arduino
         ser.write(b"SOLANA_ACK\n")
+
+        # Log the run
+        log_run(score, duration, signature)
         
         # Generate QR Code for Judges
         explorer_url = f"https://explorer.solana.com/tx/{signature}?cluster=devnet"
@@ -93,7 +104,7 @@ while True:
         if line.startswith("SOLANA_RECORD:"):
             # Parse the data: "SOLANA_RECORD:50:45000"
             parts = line.split(":")
-            score = parts[1]
-            time_ms = parts[2]
+            score = int(parts[1])
+            time_ms = int(parts[2])
             
             send_to_blockchain(score, time_ms)
