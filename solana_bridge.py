@@ -8,6 +8,8 @@ from solana.transaction import Transaction
 from solders.instruction import Instruction
 import qrcode
 import json
+import csv
+from datetime import datetime
 
 # ================= CONFIGURATION =================
 ARDUINO_PORT = "COM3"  # CHANGE THIS to your Arduino Port
@@ -25,6 +27,16 @@ sender = Keypair.from_bytes(key_data)
 print(f"✅ Bridge Loaded. Wallet: {sender.pubkey()}")
 print(f"📡 Listening on {ARDUINO_PORT}...")
 
+def log_run(score, duration, signature):
+    with open("runs.csv", "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            datetime.now().isoformat(),
+            score,
+            duration,
+            signature
+        ])
+
 def send_to_blockchain(score, duration):
     print(f"\n[EVENT] Robot finished! Score: {score}, Time: {duration}ms")
     print("       Minting Proof of Run...")
@@ -32,7 +44,13 @@ def send_to_blockchain(score, duration):
     # We use the "Memo" program to attach text to a transaction
     # This writes the score permanently onto the chain
     memo_program_id = Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcQb")
-    memo_text = f"UTRA HACKS 2026 | TEAM BIATHLON | SCORE: {score} | TIME: {duration}ms".encode("utf-8")
+    ROBOT_ID = "UTRA-BIATHLON-01"
+    RUN_ID += 1
+
+    memo_text = (
+        f"UTRA HACKS 2026 | {ROBOT_ID} | RUN {RUN_ID} | "
+        f"SCORE: {score} | TIME: {duration}ms"
+    ).encode("utf-8")
 
     # Create Transaction Instruction
     memo_ix = Instruction(
@@ -52,6 +70,9 @@ def send_to_blockchain(score, duration):
         
         print("       ✅ SUCCESS! Transaction Confirmed.")
         print(f"       Signature: {signature}")
+
+        # Acknowledge to Arduino
+        ser.write(b"SOLANA_ACK\n")
         
         # Generate QR Code for Judges
         explorer_url = f"https://explorer.solana.com/tx/{signature}?cluster=devnet"
