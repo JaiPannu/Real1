@@ -1,0 +1,6 @@
+pyserial==3.5
+solders==0.21.0
+solana==0.33.0
+qrcode==7.4.2
+flask>=3.0.0
+requests==2.31.0

@@ -11,12 +11,15 @@ import json
 import csv
 from datetime import datetime
 import os
+import requests
 
 # ================= CONFIGURATION =================
 ARDUINO_PORT = "COM3"  # CHANGE THIS to your Arduino Port
 BAUD_RATE = 9600
 WALLET_PATH = "hackathon-wallet.json" # Path to the file you generated in Phase 1
 RUN_ID = 0 # Incremental Run ID for each submission
+FLASK_SERVER = "http://127.0.0.1:5000"  # Flask leaderboard server URL
+ROBOT_ID = "UTRA-BIATHLON-01"  # Identifier for this robot
 
 # Solana Setup (Devnet)
 client = Client("https://api.devnet.solana.com")
@@ -44,6 +47,27 @@ def log_run(score, duration, signature):
             duration,
             signature
         ])
+    
+    # Send to Flask leaderboard
+    try:
+        response = requests.post(
+            f"{FLASK_SERVER}/api/submit_run",
+            json={
+                'score': score,
+                'duration': duration,
+                'signature': signature,
+                'robot_id': ROBOT_ID
+            },
+            timeout=5
+        )
+        if response.status_code == 201:
+            print("       📊 Sent to leaderboard!")
+        else:
+            print(f"       ⚠️  Leaderboard response: {response.status_code}")
+    except requests.exceptions.ConnectionError:
+        print("       ⚠️  Flask server not running. Continuing without leaderboard update...")
+    except Exception as e:
+        print(f"       ⚠️  Could not reach leaderboard: {e}")
 
 def send_to_blockchain(score, duration, ser):
     print(f"\n[EVENT] Robot finished! Score: {score}, Time: {duration}ms")
@@ -52,7 +76,6 @@ def send_to_blockchain(score, duration, ser):
     # We use the "Memo" program to attach text to a transaction
     # This writes the score permanently onto the chain
     memo_program_id = Pubkey.from_string("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcQb")
-    ROBOT_ID = "UTRA-BIATHLON-01"
     global RUN_ID; RUN_ID += 1
 
     memo_text = (
